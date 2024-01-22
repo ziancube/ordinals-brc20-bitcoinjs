@@ -16,7 +16,7 @@ const {
   } = ordinalsBitcoinjs
 
 const network = bitcoin.networks.testnet 
-const mnemonic = `elephant romance remove dry volcano trouble practice approve chuckle museum cook garment spirit embark force labor erupt apple`;
+const mnemonic = `gauge hole clog property soccer idea cycle stadium utility slice hold chief`;
 const seed = bip39.mnemonicToSeedSync(mnemonic);
 const root = bip32.fromSeed(seed, network);
 const origin_node = root.derivePath("m/86'/1'/0'/0/0");
