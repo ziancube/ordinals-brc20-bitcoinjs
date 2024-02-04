@@ -10,8 +10,6 @@ bitcoinjsLib.initEccLib(ecc)
 
 const ECPair = ECPairFactory.default(ecc)
 
-const network = bitcoinjsLib.networks.testnet
-
 const encoder = new TextEncoder()
 
 function toXOnly(pubkey) {
@@ -46,7 +44,7 @@ function createInscriptionScript({ xOnlyPublicKey, inscription }) {
   ]
 }
 
-function createCommitTxData({ publicKey, inscription }) {
+function createCommitTxData({ publicKey, inscription, network=bitcoinjsLib.networks.testnet}) {
   assert(publicKey, 'encodePublic is required')
   assert(inscription, 'inscription is required')
   const xOnlyPublicKey = toXOnly(publicKey)
@@ -83,7 +81,7 @@ function createCommitTxData({ publicKey, inscription }) {
   }
 }
 
-async function createRevealTx({ commitTxData, commitTxResult, toAddress, privateKey, amount }) {
+async function createRevealTx({ commitTxData, commitTxResult, toAddress, privateKey, amount, network=bitcoinjsLib.networks.testnet}) {
   assert(commitTxData, `commitTxData is required`)
   assert(commitTxResult, `commitTxResult is required`)
   assert(toAddress, `toAddress is required`)

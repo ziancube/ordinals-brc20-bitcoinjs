@@ -1,134 +1,12 @@
 const bitcoin = require('bitcoinjs-lib');
-const bip39 = require('bip39');
-const ecc = require('tiny-secp256k1')
-const { BIP32Factory } = require('bip32')
-const bip32 = BIP32Factory(ecc)
-bitcoin.initEccLib(ecc);
 const ordinalsBitcoinjs = require('./src/ordinals-bitcoinjs')
 
+
 const {
-    ECPair,
-    createRevealTx,
     createCommitTxData,
-    witnessStackToScriptWitness,
     createTextInscription,
     toXOnly,
   } = ordinalsBitcoinjs
-
-const network = bitcoin.networks.testnet
-const mnemonic = `gauge hole clog property soccer idea cycle stadium utility slice hold chief`;
-const seed = bip39.mnemonicToSeedSync(mnemonic);
-const root = bip32.fromSeed(seed, network);
-const origin_node = root.derivePath("m/86'/1'/0'/0/0");
-const reveal_node = root.derivePath("m/86'/1'/0'/0/1");
-const origin_keypair = ECPair.fromPrivateKey(origin_node.privateKey,{ network })
-const origin_tweaked = tweakSigner(origin_keypair, { network })
-const reveal_keypair = ECPair.fromPrivateKey(reveal_node.privateKey,{ network })
-const deploy_json = { 
-    "p": "brc-20",
-    "op": "deploy",
-    "tick": "zian",
-    "max": "21000000",
-    "lim": "1000"
-  }
-function tweakSigner(signer, opts = {}) {
-    let privateKey = signer.privateKey;
-    if (!privateKey) {
-        throw new Error('Private key is required for tweaking signer!');
-    }
-    if (signer.publicKey[0] === 3) {
-        privateKey = ecc.privateNegate(privateKey);
-    }
-    const tweakedPrivateKey = ecc.privateAdd(privateKey, tapTweakHash(toXOnly(signer.publicKey), opts.tweakHash));
-    if (!tweakedPrivateKey) {
-        throw new Error('Invalid tweaked private key!');
-    }
-    return ECPair.fromPrivateKey(Buffer.from(tweakedPrivateKey), {
-        network: opts.network,
-    });
-}
-
-function tapTweakHash(pubKey, h) {
-    return bitcoin.crypto.taggedHash('TapTweak', Buffer.concat(h ? [pubKey, h] : [pubKey]));
-}
-
-async function main() {
-    origin_address = bitcoin.payments.p2tr({ internalPubkey: toXOnly(origin_node.publicKey), network }).address
-    console.log(origin_address);
-    //create commit data
-    const inscription = createTextInscription({ text: JSON.stringify(deploy_json)})
-    const commitTxData = createCommitTxData({publicKey: reveal_keypair.publicKey, inscription })
-    const reveal_address = commitTxData.revealAddress
-    const dust = 546
-    const txSize = 600 + Math.floor(inscription.content.length / 4)
-    const feeRate = 1
-    const minersFee = txSize * feeRate
-    const requiredAmount = 550 + minersFee + dust
-
-
-    //create commit tx
-    const commitTx = new bitcoin.Psbt({ network })
-    commitTx.addInput({
-        hash: '11252d79cc35babce8c39a8311b9632ee98ca08f3b683f40b05ce0c1e06ed3d2', 
-        index: 0,
-        witnessUtxo: {
-            script: Buffer.from("5120b9df646724f062a5fc0dff79d4872d84c18d0b2908aa613bbe284a3ecdd07ead",'hex'),
-            value: 549,
-        },
-        tapInternalKey: toXOnly(origin_node.publicKey),
-    })
-    commitTx.addInput({
-        hash: 'abe1db4bc4ca7ba2f3bd6a8112f1a800d616a3940bee5fdcb7847a665dd08ca2', 
-        index: 4,
-        witnessUtxo: {
-            script: Buffer.from("5120b9df646724f062a5fc0dff79d4872d84c18d0b2908aa613bbe284a3ecdd07ead",'hex'),
-            value: 1000,
-        },
-        tapInternalKey: toXOnly(origin_node.publicKey),
-    })
-    commitTx.addInput({
-        hash: 'a86a2fc6ab8bdc5cc0ac7c005bdd1510e3fb17974d72a01813e34bd2e8f03bc7', 
-        index: 12,
-        witnessUtxo: {
-            script: Buffer.from("5120b9df646724f062a5fc0dff79d4872d84c18d0b2908aa613bbe284a3ecdd07ead",'hex'),
-            value: 1000,
-        },
-        tapInternalKey: toXOnly(origin_node.publicKey),
-    })
-    commitTx.addOutput({
-        address: reveal_address,
-        value: requiredAmount,
-    })
-    console.log("before sign:");
-    console.log(commitTx.toHex());
-    commitTx.signInput(0, origin_tweaked)
-    commitTx.signInput(1, origin_tweaked)
-    commitTx.signInput(2, origin_tweaked)
-    console.log("after sign:");
-    console.log(commitTx.toHex());
-    console.log("after finalize: ");
-    const commitRawTx = commitTx.finalizeAllInputs().extractTransaction()
-    console.log(commitRawTx.toHex());
-
-
-    //create reveal tx
-    const toAddress = origin_address
-    const commitTxResult = {
-        txId: 'd699019616fd1add93ea2e9e1a26fc29c71bf38a93400aec7ebde6a32a82bc20',  //change to commitTxid
-        sendUtxoIndex: 0,
-        sendAmount: requiredAmount,
-      }
-
-    const revelRawTx = await createRevealTx({
-        commitTxData,
-        commitTxResult,
-        toAddress,
-        privateKey:reveal_node.privateKey,
-        amount: dust,
-      })
-    
-    console.log(revelRawTx.rawTx)
-}
 
 function p2pkh() {
     // 44'
@@ -289,9 +167,100 @@ function p2tr() {
     console.log(psbt.toBase64())
 }
 
+function brc20() {
+    // 86'
+    var psbt = new bitcoin.Psbt({network: bitcoin.networks.bitcoin});
+
+    // deploy
+    const deploy = { 
+        "p": "brc-20",
+        "op": "deploy",
+        "tick": "zian",
+        "max": "21000000",
+        "lim": "1000"
+    }
+    const xpk = toXOnly(Buffer.from("03975efe3b98e44ebc274316d45fd43080a8486dd95a692963b3c78763bf1670a5", 'hex'))
+    const inscription = createTextInscription({ text: JSON.stringify(deploy)})
+      // m/86'/0'/0'/0/0 script path spending
+    const txData = createCommitTxData({
+        publicKey: Buffer.from("03975efe3b98e44ebc274316d45fd43080a8486dd95a692963b3c78763bf1670a5", 'hex'), 
+        inscription,
+        network: bitcoin.networks.bitcoin
+    })
+    // console.log(txData)
+
+    // 0200000001d2d36ee0c1e05cb0403f683b8fa08ce92e63b911839ac3e8bcba35cc792d2511000000006a47304402202d7945d91c1d5624e9247d88aa2ab09f605cd03a9ce400e9c92b770851a8a12e0220793ba631493f62478c94030d2ac59133c2e0521ef52ea5329b3c86faed8527f3012103d534107f17143fd2d03476377a80a81fa9435d418d7cd0792e7547271f25d86ffdffffff01084c010000000000225120e751e8d1e28c687781b1fd294e7f3ba24bfbf2e3ebd87ec19bc9cdc3729619b500000000
+    psbt.addInput({
+        hash: "993afebb77f135aa0dbd249c26995dc2ac9000ca738924f1c57abda1bb09e157",
+        index: 0,
+        witnessUtxo: {
+            script: Buffer.from("5120e751e8d1e28c687781b1fd294e7f3ba24bfbf2e3ebd87ec19bc9cdc3729619b5", "hex"),
+            value: 85000,
+        },
+        tapBip32Derivation: [
+            {
+                masterFingerprint: Buffer.from("f1c149f5", 'hex'),
+                pubkey: xpk,
+                path: "m/86'/0'/0'/0/0",
+                leafHashes: [],
+            },
+        ],
+        tapInternalKey: xpk,
+    });
+    psbt.addOutput({
+        address: txData.revealAddress,
+        value: 84000
+    })
+
+    //部署交易，在外部看来就是一个普通的p2tr交易
+    console.log("brc20 deploy psbt:")
+    console.log(psbt.toBase64())
+    
+    // use device sign deploy result:
+    // const signed = 'cHNidP8BAF4CAAAAAVfhCbuhvXrF8SSJc8oAkKzCXZkmnCS9Dao18Xe7/jqZAAAAAAD/////ASBIAQAAAAAAIlEg5ve1POcXT2edGCw3QC9AhRLB2LUMa7EoIC3spaDn1ZYAAAAAAAEBKwhMAQAAAAAAIlEg51Ho0eKMaHeBsf0pTn87okv78uPr2H7Bm8nNw3KWGbUBCEIBQHuYkixGjx1/lTDEE3F1aREHw3ASPxborbaeIlHaXMJ/8XvsLv7VTgooMesux8oIyhaBIJ8QZHjKqASkxhGunDoAAA=='
+    // psbt = bitcoin.Psbt.fromBase64(signed)
+    // const tx = psbt.extractTransaction()
+    // console.log(tx.toHex())
+
+    // 
+    // 0200000000010157e109bba1bd7ac5f1248973ca0090acc25d99269c24bd0daa35f177bbfe3a990000000000ffffffff012048010000000000225120e6f7b53ce7174f679d182c37402f408512c1d8b50c6bb128202deca5a0e7d59601407b98922c468f1d7f9530c4137175691107c370123f16e8adb69e2251da5cc27ff17bec2efed54e0a2831eb2ec7ca08ca1681209f106478caa804a4c611ae9c3a00000000
+    psbt = new bitcoin.Psbt({network: bitcoin.networks.bitcoin});
+    psbt.addInput({
+        hash: "fbbe306264d49750db1160a9c3570493f5c45718d1fd1ba3828e93ead26769d4",
+        index: 0,
+        witnessUtxo: {
+            script: Buffer.from("5120e6f7b53ce7174f679d182c37402f408512c1d8b50c6bb128202deca5a0e7d596", "hex"),
+            value: 84000,
+        },
+        tapBip32Derivation: [
+            {
+                masterFingerprint: Buffer.from("f1c149f5", 'hex'),
+                pubkey: xpk,
+                path: "m/86'/0'/0'/0/0",
+                leafHashes: [],
+            },
+        ],
+        tapInternalKey: xpk,
+        tapLeafScript: [{
+            leafVersion: 0xc0,
+            script: txData.outputScript, // compiled txData.script
+            controlBlock: Buffer.from(txData.cblock, 'hex')
+        }]
+    })
+
+    psbt.addOutput({
+        address: "bc1pgfyvjaml37u46tlg94vlhnfuc64k9exew4xyxwu3gkhy2tddxqesukh7s2",
+        value: 40000,
+    });
+    console.log("brc20 tx psbt:")
+    console.log(psbt.toBase64())
+    console.log(txData.scriptTaproot.output.toString("hex"))
+}
+
 // main().catch(console.error);
 
 p2pkh()
 p2wpkh()
 p2wpkh_p2sh()
 p2tr()
+brc20()
