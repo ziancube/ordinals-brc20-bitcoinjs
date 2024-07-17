@@ -1,5 +1,6 @@
 const bitcoin = require('bitcoinjs-lib');
 const ordinalsBitcoinjs = require('./src/ordinals-bitcoinjs')
+const fs = require('fs')
 
 
 const {
@@ -7,6 +8,30 @@ const {
     createTextInscription,
     toXOnly,
   } = ordinalsBitcoinjs
+
+
+// mock other user mnemonic
+
+const ecc = require('tiny-secp256k1')
+const { BIP32Factory } = require('bip32')
+const bip32 = BIP32Factory(ecc)
+const bip39 = require('bip39');
+bitcoin.initEccLib(ecc);
+// a random mnemonic
+const mnemonic = `screen wagon below bronze rhythm sample wheel expire beyond tilt horror draft`;
+const seed = bip39.mnemonicToSeedSync(mnemonic);
+const root = bip32.fromSeed(seed);
+console.log(root.fingerprint.toString('hex'));
+
+const tweakHash = (pk, h) => bitcoin.crypto.taggedHash('TapTweak', Buffer.concat(h ? [pk, h] : [pk]))
+const internal = root.derivePath("m/86'/0'/0'/0/0");
+const pk = internal.publicKey
+const out = internal.tweak(tweakHash(toXOnly(pk)))
+const payment = bitcoin.payments.p2tr({ pubkey: toXOnly(out.publicKey) })
+const script = payment.output
+console.log("pk: ", pk.toString('hex'))
+console.log("script: ", script.toString('hex'))
+console.log("address: ",payment.address)
 
 function p2pkh() {
     // 44'
@@ -24,6 +49,22 @@ function p2pkh() {
             },
         ],
     });
+
+    // add other user inputs
+    // 0200000001d2d36ee0c1e05cb0403f683b8fa08ce92e63b911839ac3e8bcba35cc792d2511000000006a4730440220329f165d778a060edda44489db6994dcd62d482d7eb0a16913345fc840a8522202202f9cc1526c027615371fafbe08adfcb2e121873a625f8ea214f146cf690b9ecf012103d534107f17143fd2d03476377a80a81fa9435d418d7cd0792e7547271f25d86ffdffffff02a00f0000000000001976a914c66a0b8d464c7da116964638e03b37283744ebe688ac0b0000000000000017a914d58582358f4c0c6c5625566de9be307dd617af4e8700000000
+    psbt.addInput({
+        hash: "93aa9299faf83ca8873d77a68025e4af3610b237a4e7c6dbaea896fbffc8347e",
+        index: 0,
+        nonWitnessUtxo: Buffer.from("0200000001d2d36ee0c1e05cb0403f683b8fa08ce92e63b911839ac3e8bcba35cc792d2511000000006a4730440220329f165d778a060edda44489db6994dcd62d482d7eb0a16913345fc840a8522202202f9cc1526c027615371fafbe08adfcb2e121873a625f8ea214f146cf690b9ecf012103d534107f17143fd2d03476377a80a81fa9435d418d7cd0792e7547271f25d86ffdffffff02a00f0000000000001976a914c66a0b8d464c7da116964638e03b37283744ebe688ac0b0000000000000017a914d58582358f4c0c6c5625566de9be307dd617af4e8700000000", "hex"),
+        bip32Derivation: [
+            {
+                masterFingerprint: Buffer.from("8d2ef997", 'hex'),
+                pubkey: Buffer.from("024de6e2233189426256a50d067c814c6a7cc44c30f972c373d121728a17375eba", "hex"),
+                path: "m/44'/0'/0'/0/0",
+            }
+        ]
+    })
+
     psbt.addOutput({
         address: "1HRTGYnPZKPijkywF1KpLLNezKdbgCVSY8",
         value: 84000,
@@ -41,6 +82,7 @@ function p2pkh() {
     });
     console.log("p2pkh => p2pkh tx:")
     console.log(psbt.toBase64())
+    fs.writeFileSync("p2pkh.psbt", psbt.toBase64())
 }
 
 
@@ -64,6 +106,25 @@ function p2wpkh() {
             },
         ],
     });
+
+    // 0200000001d2d36ee0c1e05cb0403f683b8fa08ce92e63b911839ac3e8bcba35cc792d2511000000006a47304402207633c107a7d284338ca00433e9444fa821f45658776340928a8f8f5519977e5c022067b886f1fac4f4c77fc76d85f4365113dd993a64397637b7db4d68133c254a78012103d534107f17143fd2d03476377a80a81fa9435d418d7cd0792e7547271f25d86ffdffffff02a00f0000000000001600142cabeb97a530807f7756a4b61fcc08f464385d510b0000000000000017a914d58582358f4c0c6c5625566de9be307dd617af4e8700000000
+    psbt.addInput({
+        hash: "eb4f6be889395eb55a6a34c2146bddcea69c57145fc2b5de6822b4e880020237",
+        index: 0,
+        nonWitnessUtxo: Buffer.from("0200000001d2d36ee0c1e05cb0403f683b8fa08ce92e63b911839ac3e8bcba35cc792d2511000000006a47304402207633c107a7d284338ca00433e9444fa821f45658776340928a8f8f5519977e5c022067b886f1fac4f4c77fc76d85f4365113dd993a64397637b7db4d68133c254a78012103d534107f17143fd2d03476377a80a81fa9435d418d7cd0792e7547271f25d86ffdffffff02a00f0000000000001600142cabeb97a530807f7756a4b61fcc08f464385d510b0000000000000017a914d58582358f4c0c6c5625566de9be307dd617af4e8700000000", "hex"),
+        witnessUtxo: {
+            script: Buffer.from("00142cabeb97a530807f7756a4b61fcc08f464385d51", 'hex'),
+            value: 4000,
+        },
+        bip32Derivation: [
+            {
+                masterFingerprint: Buffer.from("8d2ef997", 'hex'),
+                pubkey: Buffer.from("03094aa2af98217df0815fc4f4360cb2404a28fa2d9c905d9f576366465396c340", "hex"),
+                path: "m/84'/0'/0'/0/0",
+            },
+        ],
+    });
+
     psbt.addOutput({
         address: "bc1qkqz0tlvd3quptynjs07t7zmf3sdrupchdhxu8r",
         value: 84000,
@@ -81,6 +142,7 @@ function p2wpkh() {
     });
     console.log("p2wpkh => p2wpkh tx:")
     console.log(psbt.toBase64())
+    fs.writeFileSync("p2wpkh.psbt", psbt.toBase64())    
 }
 
 function p2wpkh_p2sh() {
@@ -105,6 +167,21 @@ function p2wpkh_p2sh() {
             },
         ],
     });
+
+    // 0200000001d2d36ee0c1e05cb0403f683b8fa08ce92e63b911839ac3e8bcba35cc792d2511000000006a4730440220611aec05c9e16fae584e8bb137c18ab44ef96c74dfc73acd5f1eef0936349db50220140d6de592adcdcfceee2e67124c143221ce8c5c2091697a795b905a05af458c012103d534107f17143fd2d03476377a80a81fa9435d418d7cd0792e7547271f25d86ffdffffff02a00f00000000000017a914af3fea4b016eedd64e5537ccdba9b81c08ffcacc870b0000000000000017a914d58582358f4c0c6c5625566de9be307dd617af4e8700000000
+    psbt.addInput({
+        hash: "385bf78cbbc0234dab6ff73b8a7ba9fc102f0856cd3abd56bbfbd5168ebafe82",
+        index: 0,
+        nonWitnessUtxo: Buffer.from("0200000001d2d36ee0c1e05cb0403f683b8fa08ce92e63b911839ac3e8bcba35cc792d2511000000006a4730440220611aec05c9e16fae584e8bb137c18ab44ef96c74dfc73acd5f1eef0936349db50220140d6de592adcdcfceee2e67124c143221ce8c5c2091697a795b905a05af458c012103d534107f17143fd2d03476377a80a81fa9435d418d7cd0792e7547271f25d86ffdffffff02a00f00000000000017a914af3fea4b016eedd64e5537ccdba9b81c08ffcacc870b0000000000000017a914d58582358f4c0c6c5625566de9be307dd617af4e8700000000", 'hex'),
+        bip32Derivation: [
+            {
+                masterFingerprint: Buffer.from("8d2ef997", 'hex'),
+                pubkey: Buffer.from("03930344409ed17ad13aced7e36b7c007ba7fd1c15facab3351e2ed4d22cefa89f", "hex"),
+                path: "m/49'/0'/0'/0/0",
+            }
+        ]
+    });
+    
     psbt.addOutput({
         address: "3KWAbFcKxwpo3oUfQWgw5wahW6ifGTZgds",
         value: 84000,
@@ -122,6 +199,7 @@ function p2wpkh_p2sh() {
     });
     console.log("p2wpkh-p2sh => p2wpkh-p2sh tx:")
     console.log(psbt.toBase64())
+    fs.writeFileSync('p2wpkh-p2sh.psbt', psbt.toBase64())
 }
 
 function p2tr() {
@@ -145,6 +223,25 @@ function p2tr() {
         ],
         tapInternalKey: toXOnly(Buffer.from("03975efe3b98e44ebc274316d45fd43080a8486dd95a692963b3c78763bf1670a5", 'hex')),
     });
+    
+    // 0200000001d2d36ee0c1e05cb0403f683b8fa08ce92e63b911839ac3e8bcba35cc792d2511000000006a473044022001a331d12711278e3e7f796d1270cf7213d0a9db26cc4076dc7295e307c5065e02201b8d527e410792dc92210a4af81978db8eeb1a9c03108c978ac039624615821a012103d534107f17143fd2d03476377a80a81fa9435d418d7cd0792e7547271f25d86ffdffffff02a00f000000000000225120cba7f01938330367655743ea1b4be46b6dde58c7f08e8d36aba93df1b70102b10b0000000000000017a914d58582358f4c0c6c5625566de9be307dd617af4e8700000000
+    psbt.addInput({
+        hash: "4a7f96aaaa5b7f615362db59c9e159fb2e9a1ec568839d8af1534aa0d58c5a21",
+        index: 0,
+        witnessUtxo: {
+            script: Buffer.from("5120cba7f01938330367655743ea1b4be46b6dde58c7f08e8d36aba93df1b70102b1", "hex"),
+            value: 4000,
+        },
+        tapBip32Derivation: [
+            {
+                masterFingerprint: Buffer.from("8d2ef997", 'hex'),
+                pubkey: Buffer.from("c16ba46f15ff8658b77cf10d502d8c61d5d412785fc1bd7492d2c0be5fea8945", "hex"),
+                path: "m/86'/0'/0'/0/0",
+                leafHashes: []
+            },
+        ],
+        tapInternalKey: toXOnly(Buffer.from("03c16ba46f15ff8658b77cf10d502d8c61d5d412785fc1bd7492d2c0be5fea8945", 'hex')),
+    });
 
     psbt.addOutput({
         address: "bc1pgfyvjaml37u46tlg94vlhnfuc64k9exew4xyxwu3gkhy2tddxqesukh7s2",
@@ -165,6 +262,7 @@ function p2tr() {
     });
     console.log("p2tr => p2tr tx:")
     console.log(psbt.toBase64())
+    fs.writeFileSync('p2tr.psbt', psbt.toBase64())
 }
 
 function brc20() {
@@ -254,6 +352,7 @@ function brc20() {
     });
     console.log("brc20 tx psbt:")
     console.log(psbt.toBase64())
+    fs.writeFileSync("brc20.psbt", psbt.toBase64())
     console.log(txData.scriptTaproot.output.toString("hex"))
 }
 
